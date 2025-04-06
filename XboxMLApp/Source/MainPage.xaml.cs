@@ -7,6 +7,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Windows.Storage;
 using Windows.Storage.Pickers;
+using Microsoft.UI;
+using WinRT.Interop;
 
 namespace XboxMLApp
 {
@@ -54,9 +56,10 @@ namespace XboxMLApp
             picker.FileTypeFilter.Add(".jpeg");
             picker.FileTypeFilter.Add(".png");
             
-            // For WinUI 3, we need to initialize the object with a window handle
-            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.Windows[0]);
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+            // Fix: Get the window handle of the current window
+            var window = WindowHelper.GetWindowForElement(this);
+            var hwnd = WindowNative.GetWindowHandle(window);
+            InitializeWithWindow.Initialize(picker, hwnd);
             
             _selectedImageFile = await picker.PickSingleFileAsync();
             
@@ -159,6 +162,19 @@ namespace XboxMLApp
             dialog.XamlRoot = this.XamlRoot;
             
             await dialog.ShowAsync();
+        }
+    }
+    
+    // Helper class to get the Window for a UI element
+    public static class WindowHelper
+    {
+        public static Window GetWindowForElement(UIElement element)
+        {
+            if (element.XamlRoot != null)
+            {
+                return element.XamlRoot.ContentIslandEnvironment.AppWindow as Window;
+            }
+            return null;
         }
     }
 } 

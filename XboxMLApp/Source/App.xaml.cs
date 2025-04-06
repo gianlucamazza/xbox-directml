@@ -9,6 +9,14 @@ namespace XboxMLApp
     {
         private Window m_window;
 
+        // Add entry point for UWP application
+        [System.STAThreadAttribute]
+        public static void Main(string[] args)
+        {
+            global::WinRT.ComWrappersSupport.InitializeComWrappers();
+            Microsoft.UI.Xaml.Application.Start((p) => { new App(); });
+        }
+
         public App()
         {
             this.InitializeComponent();
