@@ -58,13 +58,13 @@ jobs:
         Compress-Archive -Path XboxMLApp/bin/ARM64/Release/net6.0-windows10.0.19041.0/win10-arm64/AppPackages/* -DestinationPath XboxMLApp-Deployment.zip -Force
       
     - name: Upload MSIX package
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: XboxMLApp-MSIX-Package
         path: XboxMLApp/bin/ARM64/Release/net6.0-windows10.0.19041.0/win10-arm64/AppPackages/
         
     - name: Upload deployment package
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: XboxMLApp-Deployment
         path: XboxMLApp-Deployment.zip
@@ -85,7 +85,7 @@ jobs:
         "@ | Out-File -FilePath deployment-instructions.txt
       
     - name: Upload deployment instructions
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: Istruzioni-Deployment
         path: deployment-instructions.txt 
