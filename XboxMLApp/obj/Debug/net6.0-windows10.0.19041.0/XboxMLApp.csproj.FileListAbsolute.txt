@@ -1,0 +1,1 @@
+/Users/gianlucamazza/Workspace/xbox/ml/XboxMLApp/obj/Debug/net6.0-windows10.0.19041.0/XboxMLApp.csproj.AssemblyReference.cache

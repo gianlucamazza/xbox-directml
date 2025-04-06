@@ -1,0 +1,49 @@
+# Visual Studio files
+.vs/
+.vscode/
+**/bin/
+**/obj/
+**/AppPackages/
+**/BundleArtifacts/
+**/*.user
+**/*.suo
+**/*.userprefs
+**/*.lock.json
+**/*.nuget.props
+**/*.nuget.targets
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+ARM/
+ARM64/
+AnyCPU/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+# NuGet Packages
+*.nupkg
+# The packages folder can be ignored because of Package Restore
+**/packages/*
+# except build/, which is used as an MSBuild target.
+!**/packages/build/
+
+# Deployment package
+XboxMLApp-Deployment.tar.gz
+XboxMLApp-Deployment.zip
+
+# Visual Studio for Mac
+.DS_Store
+*.userprefs
+
+# Testing files
+TestResults/
+
+# Temporary files
+*.log
+*.tmp
+*.temp 

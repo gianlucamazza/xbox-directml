@@ -1,0 +1,91 @@
+name: Xbox DirectML App Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'XboxMLApp/**'
+      - '.github/workflows/xbox-directml-build.yml'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # Consente esecuzione manuale dal portale GitHub
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+    
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '6.0.x'
+        
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.1
+      
+    - name: Add Windows SDK
+      uses: GuillaumeFalourd/setup-windows10-sdk-action@v1.11
+      with:
+        sdk-version: 19041
+      
+    - name: Restore NuGet packages
+      run: |
+        dotnet restore XboxMLApp/XboxMLApp.csproj
+      
+    - name: Ensure Models directory exists
+      run: |
+        if (-Not (Test-Path -Path "XboxMLApp/Models/resnet18.dml")) {
+          Write-Host "Creating placeholder model file"
+          New-Item -ItemType Directory -Force -Path "XboxMLApp/Models" | Out-Null
+          "Placeholder for resnet18.dml model file" | Out-File -FilePath "XboxMLApp/Models/resnet18.dml"
+        }
+      
+    - name: Build UWP App (ARM64/Release)
+      run: |
+        msbuild XboxMLApp/XboxMLApp.csproj `
+          /p:Configuration=Release `
+          /p:Platform=ARM64 `
+          /p:AppxPackageSigningEnabled=false `
+          /p:AppxBundlePlatforms="ARM64" `
+          /p:UapAppxPackageBuildMode=StoreUpload `
+          /p:GenerateAppxPackageOnBuild=true
+      
+    - name: Create deployment package
+      run: |
+        Compress-Archive -Path XboxMLApp/bin/ARM64/Release/net6.0-windows10.0.19041.0/win10-arm64/AppPackages/* -DestinationPath XboxMLApp-Deployment.zip -Force
+      
+    - name: Upload MSIX package
+      uses: actions/upload-artifact@v3
+      with:
+        name: XboxMLApp-MSIX-Package
+        path: XboxMLApp/bin/ARM64/Release/net6.0-windows10.0.19041.0/win10-arm64/AppPackages/
+        
+    - name: Upload deployment package
+      uses: actions/upload-artifact@v3
+      with:
+        name: XboxMLApp-Deployment
+        path: XboxMLApp-Deployment.zip
+        
+    - name: Generate deployment instructions
+      run: |
+        @"
+        # Istruzioni di Deployment
+        
+        1. Scarica il pacchetto "XboxMLApp-Deployment" dagli artefatti di questa build
+        2. Estrai il file ZIP su un PC Windows
+        3. Segui le istruzioni nel file WINDOWS_DEPLOYMENT_GUIDE.md per caricare sull'Xbox
+        
+        Il pacchetto contiene:
+        - File .msixbundle per l'installazione diretta
+        - PowerShell script di installazione (opzionale)
+        - File di certificato per il deployment in dev mode
+        "@ | Out-File -FilePath deployment-instructions.txt
+      
+    - name: Upload deployment instructions
+      uses: actions/upload-artifact@v3
+      with:
+        name: Istruzioni-Deployment
+        path: deployment-instructions.txt 

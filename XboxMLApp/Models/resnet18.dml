@@ -1,0 +1,8 @@
+This is a placeholder for the ResNet-18 model file.
+In a real implementation, you would need to:
+
+1. Convert a pre-trained ResNet-18 model to ONNX format
+2. Optimize the ONNX model for DirectML
+3. Save the model in your own DirectML format or use the ONNX model directly
+
+This file would be replaced with the actual model file before deploying to Xbox. 
