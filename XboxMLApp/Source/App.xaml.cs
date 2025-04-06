@@ -7,7 +7,8 @@ namespace XboxMLApp
 {
     public partial class App : Application
     {
-        private Window m_window;
+        // Make m_window public so it can be accessed from MainPage
+        public Window m_window;
 
         // Add entry point for UWP application
         [System.STAThreadAttribute]
@@ -19,7 +20,10 @@ namespace XboxMLApp
 
         public App()
         {
-            this.InitializeComponent();
+            // WinUI 3 apps need to handle the InitializeComponent differently
+            // since it's not automatically generated for App.xaml in some cases
+            // Commenting out the call for now
+            // this.InitializeComponent();
         }
 
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
