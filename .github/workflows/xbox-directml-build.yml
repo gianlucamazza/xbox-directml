@@ -43,9 +43,9 @@ jobs:
           "Placeholder for resnet18.dml model file" | Out-File -FilePath "XboxMLApp/Models/resnet18.dml"
         }
       
-    - name: Build UWP App with explicit MSIX packaging
+    - name: Build UWP App with MSIX packaging
       run: |
-        # Make sure we're generating the MSIX package
+        # Build with appropriate settings for MSIX packaging
         msbuild XboxMLApp/XboxMLApp.csproj `
           /p:Configuration=Release `
           /p:Platform=ARM64 `
@@ -54,7 +54,16 @@ jobs:
           /p:GenerateAppxPackageOnBuild=true `
           /p:AppxBundle=Always `
           /p:UapAppxPackageBuildMode=StoreUpload `
-          /t:Rebuild;_GenerateAppxPackage
+          /t:Clean,Rebuild
+        
+        # Try explicit AppxPackage target as a separate step
+        Write-Host "Attempting to generate MSIX package explicitly..."
+        msbuild XboxMLApp/XboxMLApp.csproj `
+          /p:Configuration=Release `
+          /p:Platform=ARM64 `
+          /p:AppxPackageSigningEnabled=false `
+          /p:GenerateAppxPackageOnBuild=true `
+          /t:Publish
       
     - name: Check build output
       run: |
