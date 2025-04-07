@@ -107,67 +107,144 @@ jobs:
         # Copy documentation and guidance
         Copy-Item -Path "XboxMLApp/WINDOWS_DEPLOYMENT_GUIDE.md" -Destination "XboxDeployment" -Force
         Copy-Item -Path "XboxMLApp/Models/MODEL_SETUP_GUIDE.md" -Destination "XboxDeployment" -Force
+        Copy-Item -Path "XboxMLApp/TROUBLESHOOTING.md" -Destination "XboxDeployment" -Force
+        
+        # Copy AppXManifest.xml to the root for loose file deployment
+        if (Test-Path "XboxMLApp/AppXManifest.xml") {
+          Write-Host "Copying AppXManifest.xml for loose file deployment..."
+          Copy-Item -Path "XboxMLApp/AppXManifest.xml" -Destination "XboxDeployment/AppxManifest.xml" -Force
+        } else {
+          Write-Host "Generating AppXManifest.xml for loose file deployment..."
+          # Create a manifest file directly in the deployment package
+          $manifestContent = @'
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap mp rescap">
+
+  <Identity
+    Name="XboxMLApp"
+    Publisher="CN=DevelopmentUser"
+    Version="1.0.0.0" />
+
+  <mp:PhoneIdentity PhoneProductId="80918540-d3c4-1101-91cc-d91942353d3e" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+
+  <Properties>
+    <DisplayName>Xbox DirectML Application</DisplayName>
+    <PublisherDisplayName>DevelopmentUser</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0" />
+    <TargetDeviceFamily Name="Windows.Xbox" MinVersion="10.0.19041.0" MaxVersionTested="10.0.19041.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-US" />
+  </Resources>
+
+  <Applications>
+    <Application Id="App" Executable="XboxMLApp.exe" EntryPoint="XboxMLApp.App">
+      <uap:VisualElements
+        DisplayName="Xbox DirectML App"
+        Description="DirectML machine learning inference on Xbox Series S/X"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png"
+        BackgroundColor="transparent">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <rescap:Capability Name="broadFileSystemAccess" />
+  </Capabilities>
+</Package>
+'@
+          $manifestContent | Out-File -FilePath "XboxDeployment\AppxManifest.xml" -Encoding utf8
+        }
+        
+        # Copy InstallDependencies script
+        if (Test-Path "XboxMLApp/Scripts/InstallDependencies.ps1") {
+          Write-Host "Copying InstallDependencies.ps1 script..."
+          Copy-Item -Path "XboxMLApp/Scripts/InstallDependencies.ps1" -Destination "XboxDeployment" -Force
+        }
         
         # Create a PowerShell deployment script
-        @"
-        # Xbox DirectML App Deployment Script
-        # This script helps deploy the app to Xbox in Developer Mode
-        
-        param(
-            [Parameter(Mandatory=`$true)]
-            [string]`$XboxIpAddress
-        )
-        
-        Write-Host "Connecting to Xbox at `$XboxIpAddress..."
-        
-        # Try to install WDP tools if not present
-        if (-Not (Get-Command Connect-XboxConsole -ErrorAction SilentlyContinue)) {
-            Write-Host "Xbox Device Portal PowerShell tools not found. Attempting to install..."
-            Install-Module -Name XboxWDP -Force -Scope CurrentUser
-        }
-        
-        # Connect to Xbox
-        try {
-            Connect-XboxConsole -Address `$XboxIpAddress
-            Write-Host "Connected to Xbox successfully."
-            
-            # Copy the app to Xbox
-            Write-Host "Copying app to Xbox..."
-            Copy-Item -Path ".\*" -Destination "XboxOne:\DevelopmentFiles\HostApp" -Recurse -Force
-            
-            Write-Host "App copied successfully. Please go to the Xbox Device Portal in a browser at:"
-            Write-Host "https://`$XboxIpAddress"
-            Write-Host "Then install the app from the 'Apps' section."
-        } catch {
-            Write-Host "Error connecting to Xbox: `$_"
-            Write-Host "Make sure your Xbox is in Developer Mode and accessible on the network."
-        }
-        "@ | Out-File -FilePath "XboxDeployment\DeployToXbox.ps1" -Encoding utf8
+        $deployScript = @'
+# Xbox DirectML App Deployment Script
+# This script helps deploy the app to Xbox in Developer Mode
+
+param(
+    [Parameter(Mandatory=$true)]
+    [string]$XboxIpAddress
+)
+
+Write-Host "Connecting to Xbox at $XboxIpAddress..."
+
+# Try to install WDP tools if not present
+if (-Not (Get-Command Connect-XboxConsole -ErrorAction SilentlyContinue)) {
+    Write-Host "Xbox Device Portal PowerShell tools not found. Attempting to install..."
+    Install-Module -Name XboxWDP -Force -Scope CurrentUser
+}
+
+# Connect to Xbox
+try {
+    Connect-XboxConsole -Address $XboxIpAddress
+    Write-Host "Connected to Xbox successfully."
+    
+    # Copy the app to Xbox
+    Write-Host "Copying app to Xbox..."
+    Copy-Item -Path ".\*" -Destination "XboxOne:\DevelopmentFiles\HostApp" -Recurse -Force
+    
+    Write-Host "App copied successfully. Please go to the Xbox Device Portal in a browser at:"
+    Write-Host "https://$XboxIpAddress"
+    Write-Host "Then install the app from the 'Apps' section."
+} catch {
+    Write-Host "Error connecting to Xbox: $_"
+    Write-Host "Make sure your Xbox is in Developer Mode and accessible on the network."
+}
+'@
+        $deployScript | Out-File -FilePath "XboxDeployment\DeployToXbox.ps1" -Encoding utf8
         
         # Create a simplified readme
-        @"
-        # Xbox DirectML App Deployment Package
-        
-        This package contains the Xbox DirectML application for deployment to Xbox Series S/X.
-        
-        ## Contents
-        
-        - DirectML application binaries
-        - Deployment guides
-        - Deployment PowerShell script
-        
-        ## Quick Start
-        
-        1. Ensure your Xbox is in Developer Mode
-        2. Connect your Windows PC to the same network as your Xbox
-        3. From a Windows PC, run the PowerShell script:
-           ```
-           .\DeployToXbox.ps1 -XboxIpAddress 192.168.1.xxx
-           ```
-           (Replace with your Xbox's actual IP address)
-        
-        For more detailed instructions, see the WINDOWS_DEPLOYMENT_GUIDE.md file.
-        "@ | Out-File -FilePath "XboxDeployment\README.md" -Encoding utf8
+        $readmeContent = @'
+# Xbox DirectML App Deployment Package
+
+This package contains the Xbox DirectML application for deployment to Xbox Series S/X.
+
+## Contents
+
+- DirectML application binaries
+- AppxManifest.xml (required for loose file deployment)
+- Deployment guides
+- Deployment PowerShell script
+
+## Quick Start
+
+1. Ensure your Xbox is in Developer Mode
+2. Connect your Windows PC to the same network as your Xbox
+3. From a Windows PC, run the PowerShell script:
+   ```
+   .\DeployToXbox.ps1 -XboxIpAddress 192.168.1.xxx
+   ```
+   (Replace with your Xbox's actual IP address)
+
+4. If you encounter the error 0x800700d8, run:
+   ```
+   .\InstallDependencies.ps1 -XboxIpAddress 192.168.1.xxx
+   ```
+   Then try installing the app again
+
+For more detailed instructions, see the WINDOWS_DEPLOYMENT_GUIDE.md file.
+'@
+        $readmeContent | Out-File -FilePath "XboxDeployment\README.md" -Encoding utf8
         
         # Package everything into a zip file
         Compress-Archive -Path "XboxDeployment\*" -DestinationPath "XboxMLApp-Deployment.zip" -Force
@@ -209,24 +286,33 @@ jobs:
         
     - name: Generate deployment instructions
       run: |
-        @"
-        # Deployment Instructions
-        
-        1. Download the "XboxMLApp-Deployment" package from the artifacts of this build
-        2. Extract the ZIP file on a Windows PC
-        3. Connect the Windows PC to the same network as your Xbox in Developer Mode
-        4. Run the included PowerShell script:
-           ```
-           .\DeployToXbox.ps1 -XboxIpAddress 192.168.1.xxx
-           ```
-           (Replace with your Xbox's actual IP address)
-        
-        If no MSIX files are found:
-        - Use the application binaries included in the deployment package
-        - Copy them directly to the Xbox using the Device Portal
-        
-        For detailed instructions, see the WINDOWS_DEPLOYMENT_GUIDE.md file included in the package.
-        "@ | Out-File -FilePath deployment-instructions.txt
+        $instructionsContent = @'
+# Deployment Instructions
+
+1. Download the "XboxMLApp-Deployment" package from the artifacts of this build
+2. Extract the ZIP file on a Windows PC
+3. Connect the Windows PC to the same network as your Xbox in Developer Mode
+4. Run the included PowerShell script:
+   ```
+   .\DeployToXbox.ps1 -XboxIpAddress 192.168.1.xxx
+   ```
+   (Replace with your Xbox's actual IP address)
+
+## Loose File Deployment
+
+The package contains everything needed for loose file deployment:
+- AppxManifest.xml in the root directory
+- All necessary assets and binaries
+- Installation scripts
+
+If you encounter error 0x800700d8:
+1. Run the InstallDependencies.ps1 script to install VCLibs
+2. Restart your Xbox
+3. Try deploying again
+
+For detailed instructions, see the WINDOWS_DEPLOYMENT_GUIDE.md file included in the package.
+'@
+        $instructionsContent | Out-File -FilePath deployment-instructions.txt
       
     - name: Upload deployment instructions
       uses: actions/upload-artifact@v4
