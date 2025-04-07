@@ -43,15 +43,18 @@ jobs:
           "Placeholder for resnet18.dml model file" | Out-File -FilePath "XboxMLApp/Models/resnet18.dml"
         }
       
-    - name: Build UWP App (ARM64/Release)
+    - name: Build UWP App with explicit MSIX packaging
       run: |
+        # Make sure we're generating the MSIX package
         msbuild XboxMLApp/XboxMLApp.csproj `
           /p:Configuration=Release `
           /p:Platform=ARM64 `
           /p:AppxPackageSigningEnabled=false `
           /p:AppxBundlePlatforms="ARM64" `
+          /p:GenerateAppxPackageOnBuild=true `
+          /p:AppxBundle=Always `
           /p:UapAppxPackageBuildMode=StoreUpload `
-          /p:GenerateAppxPackageOnBuild=true
+          /t:Rebuild;_GenerateAppxPackage
       
     - name: Check build output
       run: |
@@ -59,68 +62,135 @@ jobs:
         Write-Host "=== Checking bin directory structure ==="
         Get-ChildItem -Path XboxMLApp/bin -Recurse | Select-Object -First 30 | Format-Table FullName
         
-        # Check if expected app packages path exists
-        $packagesPath = "XboxMLApp/bin/ARM64/Release/net6.0-windows10.0.19041.0/win10-arm64/AppPackages"
-        $exists = Test-Path -Path $packagesPath
-        Write-Host "App packages path exists: $exists"
-        
-        if ($exists) {
-          Get-ChildItem -Path $packagesPath -Recurse | Format-Table FullName
-        }
-        
-        # Check alternative locations that might contain the build output
-        $altPaths = @(
+        # Check all possible MSIX file locations
+        $possibleLocations = @(
+          "XboxMLApp/bin/ARM64/Release/net6.0-windows10.0.19041.0/win10-arm64/AppPackages",
           "XboxMLApp/bin/ARM64/Release/AppPackages",
-          "XboxMLApp/AppPackages"
+          "XboxMLApp/AppPackages",
+          "XboxMLApp/bin/ARM64/Release"
         )
         
-        foreach ($path in $altPaths) {
-          $exists = Test-Path -Path $path
-          Write-Host "Checking alternate path: $path - Exists: $exists"
-          if ($exists) {
-            Get-ChildItem -Path $path -Recurse | Format-Table FullName
+        foreach ($loc in $possibleLocations) {
+          if (Test-Path $loc) {
+            Write-Host "Contents of $loc:"
+            Get-ChildItem -Path $loc -Recurse | ForEach-Object {
+              Write-Host $_.FullName
+            }
           }
         }
+        
+        # Search for MSIX files
+        Write-Host "=== Searching for MSIX/APPX files ==="
+        $msixFiles = Get-ChildItem -Path XboxMLApp -Recurse -Include *.msix, *.msixbundle, *.appx, *.appxbundle
+        foreach ($file in $msixFiles) {
+          Write-Host "Found package: $($file.FullName)"
+        }
       
-    - name: Create deployment package
+    - name: Create manual deployment package
       run: |
-        # Find AppPackages directory (it might be in different locations)
-        $packageDirs = @(
-          "XboxMLApp/bin/ARM64/Release/net6.0-windows10.0.19041.0/win10-arm64/AppPackages", 
-          "XboxMLApp/bin/ARM64/Release/AppPackages",
-          "XboxMLApp/AppPackages"
+        Write-Host "Creating manual deployment package..."
+        # Create a directory for packaging
+        New-Item -ItemType Directory -Force -Path "XboxDeployment" | Out-Null
+        
+        # Copy the built app (all bin contents)
+        Copy-Item -Path "XboxMLApp/bin/ARM64/Release/net6.0-windows10.0.19041.0/*" -Destination "XboxDeployment" -Recurse -Force
+        
+        # Copy documentation and guidance
+        Copy-Item -Path "XboxMLApp/WINDOWS_DEPLOYMENT_GUIDE.md" -Destination "XboxDeployment" -Force
+        Copy-Item -Path "XboxMLApp/Models/MODEL_SETUP_GUIDE.md" -Destination "XboxDeployment" -Force
+        
+        # Create a PowerShell deployment script
+        @"
+        # Xbox DirectML App Deployment Script
+        # This script helps deploy the app to Xbox in Developer Mode
+        
+        param(
+            [Parameter(Mandatory=`$true)]
+            [string]`$XboxIpAddress
         )
         
-        $foundPackages = $false
+        Write-Host "Connecting to Xbox at `$XboxIpAddress..."
         
-        foreach ($dir in $packageDirs) {
-          if (Test-Path -Path $dir) {
-            Write-Host "Found packages in: $dir"
-            Compress-Archive -Path "$dir/*" -DestinationPath XboxMLApp-Deployment.zip -Force
-            $foundPackages = $true
-            break
+        # Try to install WDP tools if not present
+        if (-Not (Get-Command Connect-XboxConsole -ErrorAction SilentlyContinue)) {
+            Write-Host "Xbox Device Portal PowerShell tools not found. Attempting to install..."
+            Install-Module -Name XboxWDP -Force -Scope CurrentUser
+        }
+        
+        # Connect to Xbox
+        try {
+            Connect-XboxConsole -Address `$XboxIpAddress
+            Write-Host "Connected to Xbox successfully."
+            
+            # Copy the app to Xbox
+            Write-Host "Copying app to Xbox..."
+            Copy-Item -Path ".\*" -Destination "XboxOne:\DevelopmentFiles\HostApp" -Recurse -Force
+            
+            Write-Host "App copied successfully. Please go to the Xbox Device Portal in a browser at:"
+            Write-Host "https://`$XboxIpAddress"
+            Write-Host "Then install the app from the 'Apps' section."
+        } catch {
+            Write-Host "Error connecting to Xbox: `$_"
+            Write-Host "Make sure your Xbox is in Developer Mode and accessible on the network."
+        }
+        "@ | Out-File -FilePath "XboxDeployment\DeployToXbox.ps1" -Encoding utf8
+        
+        # Create a simplified readme
+        @"
+        # Xbox DirectML App Deployment Package
+        
+        This package contains the Xbox DirectML application for deployment to Xbox Series S/X.
+        
+        ## Contents
+        
+        - DirectML application binaries
+        - Deployment guides
+        - Deployment PowerShell script
+        
+        ## Quick Start
+        
+        1. Ensure your Xbox is in Developer Mode
+        2. Connect your Windows PC to the same network as your Xbox
+        3. From a Windows PC, run the PowerShell script:
+           ```
+           .\DeployToXbox.ps1 -XboxIpAddress 192.168.1.xxx
+           ```
+           (Replace with your Xbox's actual IP address)
+        
+        For more detailed instructions, see the WINDOWS_DEPLOYMENT_GUIDE.md file.
+        "@ | Out-File -FilePath "XboxDeployment\README.md" -Encoding utf8
+        
+        # Package everything into a zip file
+        Compress-Archive -Path "XboxDeployment\*" -DestinationPath "XboxMLApp-Deployment.zip" -Force
+      
+    - name: Upload MSIX files (if found)
+      run: |
+        $msixFiles = Get-ChildItem -Path XboxMLApp -Recurse -Include *.msix, *.msixbundle, *.appx, *.appxbundle
+        if ($msixFiles.Count -gt 0) {
+          Write-Host "Found MSIX packages to upload"
+          $msixDir = "msix-packages"
+          New-Item -ItemType Directory -Force -Path $msixDir | Out-Null
+          foreach ($file in $msixFiles) {
+            Copy-Item -Path $file.FullName -Destination $msixDir
           }
-        }
-        
-        if (-Not $foundPackages) {
-          # Package everything in bin directory as fallback
-          Write-Host "No AppPackages directory found, packaging bin directory instead"
-          Compress-Archive -Path "XboxMLApp/bin/*" -DestinationPath XboxMLApp-Deployment.zip -Force
-        }
-        
-        # Verify the zip was created
-        if (Test-Path -Path XboxMLApp-Deployment.zip) {
-          Write-Host "Deployment package created successfully"
         } else {
-          Write-Error "Failed to create deployment package"
-          exit 1
+          Write-Host "No MSIX packages found"
+          # Create a notice file
+          New-Item -ItemType Directory -Force -Path "msix-packages" | Out-Null
+          "No MSIX packages were generated during the build." | Out-File -FilePath "msix-packages\README.txt"
         }
       
-    - name: Upload MSIX package
+    - name: Upload built application
       uses: actions/upload-artifact@v4
       with:
-        name: XboxMLApp-MSIX-Package
-        path: XboxMLApp/bin/
+        name: XboxMLApp-Binaries
+        path: XboxMLApp/bin/ARM64/Release/net6.0-windows10.0.19041.0/
+        
+    - name: Upload MSIX/APPX packages
+      uses: actions/upload-artifact@v4
+      with:
+        name: XboxMLApp-MSIX-Packages
+        path: msix-packages/
         
     - name: Upload deployment package
       uses: actions/upload-artifact@v4
@@ -135,12 +205,18 @@ jobs:
         
         1. Download the "XboxMLApp-Deployment" package from the artifacts of this build
         2. Extract the ZIP file on a Windows PC
-        3. Follow the instructions in the WINDOWS_DEPLOYMENT_GUIDE.md file to upload to Xbox
+        3. Connect the Windows PC to the same network as your Xbox in Developer Mode
+        4. Run the included PowerShell script:
+           ```
+           .\DeployToXbox.ps1 -XboxIpAddress 192.168.1.xxx
+           ```
+           (Replace with your Xbox's actual IP address)
         
-        The package contains:
-        - .msixbundle file for direct installation
-        - PowerShell installation script (optional)
-        - Certificate file for deployment in dev mode
+        If no MSIX files are found:
+        - Use the application binaries included in the deployment package
+        - Copy them directly to the Xbox using the Device Portal
+        
+        For detailed instructions, see the WINDOWS_DEPLOYMENT_GUIDE.md file included in the package.
         "@ | Out-File -FilePath deployment-instructions.txt
       
     - name: Upload deployment instructions
