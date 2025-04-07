@@ -53,15 +53,74 @@ jobs:
           /p:UapAppxPackageBuildMode=StoreUpload `
           /p:GenerateAppxPackageOnBuild=true
       
+    - name: Check build output
+      run: |
+        # List bin directory to see what was created
+        Write-Host "=== Checking bin directory structure ==="
+        Get-ChildItem -Path XboxMLApp/bin -Recurse | Select-Object -First 30 | Format-Table FullName
+        
+        # Check if expected app packages path exists
+        $packagesPath = "XboxMLApp/bin/ARM64/Release/net6.0-windows10.0.19041.0/win10-arm64/AppPackages"
+        $exists = Test-Path -Path $packagesPath
+        Write-Host "App packages path exists: $exists"
+        
+        if ($exists) {
+          Get-ChildItem -Path $packagesPath -Recurse | Format-Table FullName
+        }
+        
+        # Check alternative locations that might contain the build output
+        $altPaths = @(
+          "XboxMLApp/bin/ARM64/Release/AppPackages",
+          "XboxMLApp/AppPackages"
+        )
+        
+        foreach ($path in $altPaths) {
+          $exists = Test-Path -Path $path
+          Write-Host "Checking alternate path: $path - Exists: $exists"
+          if ($exists) {
+            Get-ChildItem -Path $path -Recurse | Format-Table FullName
+          }
+        }
+      
     - name: Create deployment package
       run: |
-        Compress-Archive -Path XboxMLApp/bin/ARM64/Release/net6.0-windows10.0.19041.0/win10-arm64/AppPackages/* -DestinationPath XboxMLApp-Deployment.zip -Force
+        # Find AppPackages directory (it might be in different locations)
+        $packageDirs = @(
+          "XboxMLApp/bin/ARM64/Release/net6.0-windows10.0.19041.0/win10-arm64/AppPackages", 
+          "XboxMLApp/bin/ARM64/Release/AppPackages",
+          "XboxMLApp/AppPackages"
+        )
+        
+        $foundPackages = $false
+        
+        foreach ($dir in $packageDirs) {
+          if (Test-Path -Path $dir) {
+            Write-Host "Found packages in: $dir"
+            Compress-Archive -Path "$dir/*" -DestinationPath XboxMLApp-Deployment.zip -Force
+            $foundPackages = $true
+            break
+          }
+        }
+        
+        if (-Not $foundPackages) {
+          # Package everything in bin directory as fallback
+          Write-Host "No AppPackages directory found, packaging bin directory instead"
+          Compress-Archive -Path "XboxMLApp/bin/*" -DestinationPath XboxMLApp-Deployment.zip -Force
+        }
+        
+        # Verify the zip was created
+        if (Test-Path -Path XboxMLApp-Deployment.zip) {
+          Write-Host "Deployment package created successfully"
+        } else {
+          Write-Error "Failed to create deployment package"
+          exit 1
+        }
       
     - name: Upload MSIX package
       uses: actions/upload-artifact@v4
       with:
         name: XboxMLApp-MSIX-Package
-        path: XboxMLApp/bin/ARM64/Release/net6.0-windows10.0.19041.0/win10-arm64/AppPackages/
+        path: XboxMLApp/bin/
         
     - name: Upload deployment package
       uses: actions/upload-artifact@v4
