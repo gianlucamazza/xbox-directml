@@ -81,7 +81,7 @@ jobs:
         
         foreach ($loc in $possibleLocations) {
           if (Test-Path $loc) {
-            Write-Host "Contents of $loc:"
+            Write-Host "Contents of $($loc):"
             Get-ChildItem -Path $loc -Recurse | ForEach-Object {
               Write-Host $_.FullName
             }
