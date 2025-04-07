@@ -8,7 +8,7 @@ on:
       - '.github/workflows/xbox-directml-build.yml'
   pull_request:
     branches: [ main ]
-  workflow_dispatch: # Consente esecuzione manuale dal portale GitHub
+  workflow_dispatch: # Manual execution from GitHub portal
 
 jobs:
   build:
@@ -131,20 +131,20 @@ jobs:
     - name: Generate deployment instructions
       run: |
         @"
-        # Istruzioni di Deployment
+        # Deployment Instructions
         
-        1. Scarica il pacchetto "XboxMLApp-Deployment" dagli artefatti di questa build
-        2. Estrai il file ZIP su un PC Windows
-        3. Segui le istruzioni nel file WINDOWS_DEPLOYMENT_GUIDE.md per caricare sull'Xbox
+        1. Download the "XboxMLApp-Deployment" package from the artifacts of this build
+        2. Extract the ZIP file on a Windows PC
+        3. Follow the instructions in the WINDOWS_DEPLOYMENT_GUIDE.md file to upload to Xbox
         
-        Il pacchetto contiene:
-        - File .msixbundle per l'installazione diretta
-        - PowerShell script di installazione (opzionale)
-        - File di certificato per il deployment in dev mode
+        The package contains:
+        - .msixbundle file for direct installation
+        - PowerShell installation script (optional)
+        - Certificate file for deployment in dev mode
         "@ | Out-File -FilePath deployment-instructions.txt
       
     - name: Upload deployment instructions
       uses: actions/upload-artifact@v4
       with:
-        name: Istruzioni-Deployment
+        name: Deployment-Instructions
         path: deployment-instructions.txt 
